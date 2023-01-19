@@ -1,0 +1,69 @@
+// Basic setup
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "[ " ~ (!" ]" ~ ANY) ~ " ]" }
+
+kw_procedure = _{ "PROCEDURE" }
+kw_program = _{ "PROGRAM" }
+kw_is = _{ "IS" }
+kw_begin = _{ "BEGIN" }
+kw_var = _{ "VAR" }
+kw_end = _{ "END" }
+
+num = @{ ASCII_DIGIT+ }
+identifier = @{ ("_" | ASCII_ALPHA_LOWER)+ }
+
+value = { num | identifier }
+
+// Expressions
+
+add = { "+" }
+sub = { "-" }
+mul = { "*" }
+div = { "*" }
+mod = { "*" }
+
+expression = {
+    value ~ ( add | sub | mul | div | mod ) ~ value |
+    value
+}
+
+// Conditions
+
+eq = { "=" }
+ne = { "!=" }
+gt = { ">" }
+lt = { "<" }
+ge = { ">=" }
+le = { "<=" }
+
+condition = { value ~ ( eq | ne | gt | lt | ge | le ) ~ value }
+
+// Commands
+
+cmd_set = { identifier ~ ":=" ~ expression ~ ";" }
+
+command = _{ cmd_set }
+
+commands = { command+ }
+
+// Sub-structures
+
+declarations = { identifier ~ ("," ~ identifier)* }
+
+proc_head = { identifier ~ "(" ~ declarations ~ ")" }
+
+// Main program structure
+
+function = {
+    kw_is ~ kw_var ~ declarations ~ kw_begin ~ commands ~ kw_end | 
+    kw_is ~ kw_begin ~ commands ~ kw_end
+}
+
+procedure = { kw_procedure ~ proc_head ~ function }
+
+procedures = _{ procedure* }
+
+main = { kw_program ~ function }
+
+program_all = { SOI ~ procedures ~ main ~ EOI }
