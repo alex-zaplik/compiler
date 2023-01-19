@@ -4,11 +4,11 @@ extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
-use parser::parse;
+use parser::Program;
 use parser::Error;
 
 fn run_sandbox(input: &str) {
-    let result = parse(input);
+    let result = Program::parse(input);
 
     match result {
         Err(Error::Parse(err)) => {
@@ -25,7 +25,7 @@ fn run_sandbox(input: &str) {
             }
         },
         Err(Error::Pest(err)) => println!("{:?}", err),
-        Ok(()) => (),
+        Ok(program) => println!("{:#?}", program),
     }
 }
 
@@ -41,7 +41,7 @@ pub fn sandbox() {
             b
         BEGIN
             b := a + 10;
-        END
+        END  
 
         PROGRAM IS VAR
             a, _a, b
@@ -50,4 +50,4 @@ pub fn sandbox() {
             _a := a + 1;
         END
     ");
-}
+}      

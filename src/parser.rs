@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use pest::iterators::Pair;
 use pest::Parser;
@@ -7,12 +8,14 @@ use pest::Parser;
 #[grammar = "grammar.pest"]
 struct CodeParser;
 
+#[derive(Debug)]
 pub struct ParseErrorStep {
     pub row: usize,
     pub col: usize,
     pub reason: String,
 }
 
+#[derive(Debug)]
 pub struct ParseError {
     pub info: Vec<ParseErrorStep>,
     pub msg: String,
@@ -37,19 +40,34 @@ impl From<ParseError> for Error {
 
 #[derive(Debug)]
 pub struct Identifier {
+    name: String,
     row: usize,
     col: usize,
 }
 
 #[derive(Debug)]
 pub enum Value {
-    Ident(Identifier),
+    Ident(Rc<Identifier>),
     Val(u64),
 }
 
 #[derive(Debug)]
 pub enum Operator {
-    Add, Sum, Mul, Div, Mod
+    Add, Sub, Mul, Div, Rem
+}
+
+impl<'a> From<Pair<'a, Rule>> for Operator {
+    fn from(value: Pair<Rule>) -> Self {
+        match value.as_rule() {
+            Rule::add => Operator::Add,
+            Rule::sub => Operator::Sub,
+            Rule::mul => Operator::Mul,
+            Rule::div => Operator::Div,
+            Rule::rem => Operator::Rem,
+
+            _ => unreachable!()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -71,8 +89,9 @@ pub struct Condition {
     op: Comparator,
 }
 
+#[derive(Debug)]
 pub enum Command {
-    Set { val: Value, expr: Expression },
+    Set { ident: Rc<Identifier>, expr: Expression },
     Read { val: Value },
     Write { val: u64 },
     If { cond: Condition, then: Vec<Command> },
@@ -82,28 +101,64 @@ pub enum Command {
     // TODO: Call { procedure },
 }
 
-pub struct Function<'a> {
-    args: HashMap<&'a str, Identifier>,
-    vars: HashMap<&'a str, Identifier>,
+#[derive(Debug)]
+pub struct Function {
+    name: String,
+    col: usize,
+    row: usize,
+    args: HashMap<String, Rc<Identifier>>,
+    vars: HashMap<String, Rc<Identifier>>,
     cmds: Vec<Command>,
 }
 
-impl<'a> Function<'a> {
-    fn new() -> Self {
+impl Function {
+    fn new(name: String, col: usize, row: usize) -> Self {
         Self {
+            name, col, row,
             args: HashMap::new(),
             vars: HashMap::new(),
             cmds: Vec::new(),
         }
     }
 
-    fn parse_declarations(&mut self, declarations: Pair<'a, Rule>) -> Result<(), ParseError> {    
+    fn get_identifier(&self, token: Pair<Rule>) -> Result<Option<Rc<Identifier>>, ParseError> {
+        if self.args.contains_key(token.as_str()) {
+            Ok(Some(Rc::clone(self.args.get(token.as_str()).unwrap())))
+        } else if self.vars.contains_key(token.as_str()) {
+            Ok(Some(Rc::clone(self.vars.get(token.as_str()).unwrap())))
+        } else {
+            let (row, col) = token.line_col();
+            Result::Err(ParseError {
+                info: vec![ParseErrorStep { row, col, reason: format!("Undeclared variable '{}' in line {}", token.as_str(), row) }],
+                msg: String::from("Undeclared variable")
+            })
+        }
+    }
+
+    fn get_value(&self, token: Pair<Rule>) -> Result<Option<Value>, ParseError> {
+        let token = token.into_inner().next().unwrap(); 
+
+        match token.as_rule() {
+            Rule::identifier => Ok(Some(Value::Ident(self.get_identifier(token)?.unwrap()))),
+            Rule::num => Ok(Some(Value::Val(token.as_str().parse().unwrap()))),
+
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_declarations(&mut self, declarations: Pair<Rule>, use_args: bool) -> Result<(), ParseError> {
         for decl in declarations.into_inner() {
-            // Decl is always an identifier here
             let (row, col) = decl.line_col();
+
+            let prev = if self.args.contains_key(decl.as_str()) {
+                self.args.get(decl.as_str())
+            } else if self.vars.contains_key(decl.as_str()) {
+                self.vars.get(decl.as_str())
+            } else {
+                None
+            };
     
-            if self.vars.contains_key(decl.as_str()) {
-                let prev = self.vars.get(decl.as_str()).unwrap();
+            if let Some(prev) = prev {
                 return Err(ParseError {
                     info: vec![ParseErrorStep {
                         row: row,
@@ -118,96 +173,137 @@ impl<'a> Function<'a> {
                 })
             }
             
-            self.vars.insert(decl.as_str(), Identifier { row, col });
+            let name = decl.as_str().to_owned();
+            let ident = Rc::new(Identifier { name: decl.as_str().to_owned(), row, col });
+
+            if use_args {
+                self.args.insert(name, ident);
+            } else {
+                self.vars.insert(name, ident);
+            }
         }
     
         Ok(())
     }
     
-    fn parse_commands(&mut self, commands: Pair<Rule>) -> Result<(), ParseError>{
+    fn parse_commands(&mut self, commands: Pair<Rule>) -> Result<(), ParseError> {
         for cmd in commands.into_inner() {
-            match cmd.as_rule() {
+            let cmd = match cmd.as_rule() {
                 Rule::cmd_set => {
-                    // TODO: self.cmds.push(Command::Set { lhs: , rhs: (), op: () });
+                    let mut parts = cmd.into_inner();
+                    let ident = self.get_identifier(parts.next().unwrap())?.unwrap();
+                    let mut expr = parts.next().unwrap().into_inner();
+
+                    let lhs = self.get_value(expr.next().unwrap())?.unwrap();
+                    if expr.peek().is_none() {
+                        Command::Set { ident, expr: Expression { lhs, op: None, rhs: None }}
+                    } else {
+                        Command::Set { ident, expr: Expression {
+                            lhs: lhs,
+                            op: Some(Operator::from(expr.next().unwrap())),
+                            rhs: self.get_value(expr.next().unwrap())?,
+                        }}
+                    }                    
                 }
+
+                // TODO: Read, Write, If, IfElse, While, Repeat, Call
     
-                x => println!("Unexpected rule: {:?}", x),
-            }
+                _ => unreachable!(),
+            };
+            self.cmds.push(cmd);
         }
     
         Ok(())
     }
 
-    fn parse_function(function: Pair<'a, Rule>) -> Result<Self, ParseError> {
-        let mut fun = Function::new();
-    
-        for element in function.into_inner() {
-            match element.as_rule() {
-                Rule::declarations => fun.parse_declarations(element)?,
-                Rule::commands => fun.parse_commands(element)?,
-    
-                x => println!("104: Unexpected rule: {:?}", x),
-            }
+    fn parse_function(name: String, row: usize, col: usize, arguments: Option<Pair<Rule>>, function: Pair<Rule>) -> Result<Self, ParseError> {
+        let mut fun = Function::new(name, row, col);
+
+        if let Some(args) = arguments {
+            fun.parse_declarations(args, true)?;
         }
+
+        let mut parts = function.into_inner();
+
+        if let Rule::declarations = parts.peek().unwrap().as_rule() {
+            fun.parse_declarations(parts.next().unwrap(), false)?;
+        }
+
+        fun.parse_commands(parts.next().unwrap())?;
     
         Ok(fun)
     }
 }
 
-// TODO: This should be the result of a parse
-pub struct Program<'a> {
-    procedures: HashMap<&'a str, Function<'a>>,
-    main: Function<'a>,
+#[derive(Debug)]
+pub struct Program {
+    procedures: HashMap<String, Function>,
+    main: Function,
 }
 
-fn parse_procedure<'a>(procedure: Pair<'a, Rule>) -> Result<Function<'a>, ParseError> {
-    print!("Procedure ");
+impl Program {
+    fn parse_procedure(&mut self, procedure: Pair<Rule>) -> Result<(), ParseError> {
+        let (row, col) = procedure.line_col();
 
-    for elem in procedure.into_inner() {
-        match elem.as_rule() {
-            Rule::proc_head => {
-                println!("{}!", elem.as_str());
-            }
+        let mut parts = procedure.into_inner();
+        let mut head = parts.next().unwrap().into_inner();
+        let name = head.next().unwrap().as_str().to_owned();
 
-            Rule::function => {
-                return Function::parse_function(elem);
-            }
-    
-            x => println!("125: Unexpected rule: {:?}", x),
+        if self.procedures.contains_key(&name) {
+            let prev = self.procedures.get(&name).unwrap();
+
+            return Err(ParseError {
+                info: vec![ParseErrorStep {
+                    row, col,
+                    reason: format!("Procedure '{}' in line {}", name, row)
+                }, ParseErrorStep {
+                    row: prev.row, col: prev.col,
+                    reason: format!("Already declared here in line {}", prev.row)
+                }],
+                msg: String::from("Procedure already declared:"),
+            })
         }
+        
+        self.procedures.insert(name.clone(),
+            Function::parse_function(
+                name, row, col,
+                head.next(),
+                parts.next().unwrap(),
+        )?);
+
+        Ok(())
     }
-
-    Ok(Function::new())
-}
-
-fn parse_main<'a>(main: Pair<'a, Rule>) -> Result<Function<'a>, ParseError> {
-    println!("Main!");
-    Function::parse_function(main.into_inner().next().unwrap())
-}
-
-pub fn parse(input: &str) -> Result<(), Error> {
-    let tree = CodeParser::parse(Rule::program_all, input)?.next().unwrap();
-
-    for element in tree.into_inner() {
-        match element.as_rule() {
-            Rule::procedure => {
-                let res = parse_procedure(element)?;
-                println!("{:?}", res.vars);
-
-                // TODO: Do something with a procedure
-            }
-
-            Rule::main => {
-                let res = parse_main(element)?;
-                println!("{:?}", res.vars);
-
-                // TODO: Do something with main
-            }
     
-            Rule::EOI => (),
-            x => println!("Unexpected rule: {:?}", x),
-        }
-    }
+    fn parse_main(&mut self, main: Pair<Rule>) -> Result<(), ParseError> {
+        let (row, col) = main.line_col();
 
-    Ok(())
+        self.main = Function::parse_function(
+            "Main".to_owned(), row, col,
+            None,
+            main.into_inner().next().unwrap(),
+        )?;
+
+        Ok(())
+    }
+    
+    pub fn parse(input: &str) -> Result<Self, Error> {
+        let mut program = Program {
+            procedures: HashMap::new(),
+            main: Function::new("Main".to_owned(), 0, 0),
+        };
+
+        let tree = CodeParser::parse(Rule::program_all, input)?.next().unwrap();
+    
+        for element in tree.into_inner() {
+            match element.as_rule() {
+                Rule::procedure => program.parse_procedure(element)?,
+                Rule::main => program.parse_main(element)?,
+        
+                Rule::EOI => (),
+                _ => unreachable!(),
+            }
+        }
+    
+        Ok(program)
+    }
 }

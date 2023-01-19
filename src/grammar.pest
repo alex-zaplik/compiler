@@ -20,11 +20,11 @@ value = { num | identifier }
 add = { "+" }
 sub = { "-" }
 mul = { "*" }
-div = { "*" }
-mod = { "*" }
+div = { "/" }
+rem = { "%" }
 
 expression = {
-    value ~ ( add | sub | mul | div | mod ) ~ value |
+    value ~ ( add | sub | mul | div | rem ) ~ value |
     value
 }
 
