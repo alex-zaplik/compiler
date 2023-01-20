@@ -42,8 +42,15 @@ condition = { value ~ ( eq | ne | gt | lt | ge | le ) ~ value }
 // Commands
 
 cmd_set = { identifier ~ ":=" ~ expression ~ ";" }
+cmd_if = { "IF" ~ condition ~ "THEN" ~ commands ~ "ENDIF" }
+cmd_if_else = { "IF" ~ condition ~ "THEN" ~ commands ~ "ELSE" ~ commands ~ "ENDIF" }
+cmd_while = { "WHILE" ~ condition ~ "DO" ~ commands ~ "ENDWHILE" }
+cmd_repeat = { "REPEAT" ~ commands ~ "UNTIL" ~ condition ~ ";" }
+cmd_call = { proc_head ~ ";" }
+cmd_read = { "READ" ~ identifier ~ ";" }
+cmd_write = { "WRITE" ~ value ~ ";" }
 
-command = _{ cmd_set }
+command = _{ cmd_set | cmd_if | cmd_if_else | cmd_while | cmd_repeat | cmd_call | cmd_read | cmd_write }
 
 commands = { command+ }
 
