@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Debug)]
-pub struct Identifier {
-    name: String,
+#[derive(Debug, PartialEq, Eq)]
+pub struct Location {
     row: usize,
     col: usize,
 }
 
-impl Identifier {
-    pub fn new(name: String, row: usize, col: usize) -> Self {
-        Self { name, row, col }
+impl Location {
+    pub fn new() -> Self {
+        Self { row: 0, col: 0 }
     }
 
     pub fn row(&self) -> usize {
@@ -18,7 +17,33 @@ impl Identifier {
     }
 
     pub fn col(&self) -> usize {
-        self.row
+        self.col
+    }
+
+    pub fn clone(&self) -> Self {
+        Self { row: self.row, col: self.col }
+    }
+}
+
+impl From<(usize, usize)> for Location {
+    fn from((row, col): (usize, usize)) -> Self {
+        Self { row, col }
+    }
+}
+
+#[derive(Debug)]
+pub struct Identifier {
+    name: String,
+    loc: Location,
+}
+
+impl Identifier {
+    pub fn new(name: String, loc: Location) -> Self {
+        Self { name, loc }
+    }
+
+    pub fn loc(&self) -> &Location {
+        &self.loc
     }
 }
 
@@ -37,13 +62,16 @@ pub enum Operator {
 pub struct FuncCall {
     func: String,
     args: Vec<Rc<Identifier>>,
-    row: usize,
-    col: usize,
+    loc: Location,
 }
 
 impl FuncCall {
-    pub fn new(func: String, row: usize, col: usize, args: Vec<Rc<Identifier>>) -> Self {
-        Self { func, row, col, args }
+    pub fn new(func: String, loc: Location, args: Vec<Rc<Identifier>>) -> Self {
+        Self { func, loc, args }
+    }
+
+    pub fn loc(&self) -> &Location {
+        &self.loc
     }
 
     pub fn args_count(&self) -> usize {
@@ -104,14 +132,13 @@ pub struct Function {
     pub args: HashMap<String, Rc<Identifier>>,
     pub vars: HashMap<String, Rc<Identifier>>,
     pub cmds: Vec<Command>,
-    col: usize,
-    row: usize,
+    loc: Location,
 }
 
 impl Function {
-    pub fn new(name: String, col: usize, row: usize) -> Self {
+    pub fn new(name: String, loc: Location) -> Self {
         Self {
-            name, col, row,
+            name, loc,
             args: HashMap::new(),
             vars: HashMap::new(),
             cmds: Vec::new(),
@@ -122,12 +149,8 @@ impl Function {
         self.args.len()
     }
 
-    pub fn row(&self) -> usize {
-        self.row
-    }
-
-    pub fn col(&self) -> usize {
-        self.row
+    pub fn loc(&self) -> &Location {
+        &self.loc
     }
 }
 

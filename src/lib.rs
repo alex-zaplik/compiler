@@ -1,4 +1,5 @@
 mod parser;
+mod error;
 mod ast;
 
 extern crate pest;
@@ -6,33 +7,23 @@ extern crate pest;
 extern crate pest_derive;
 
 use ast::Program;
-use parser::Error;
 
 fn run_sandbox(input: &str) {
     let result = Program::parse(input);
 
     match result {
-        Err(Error::Parse(err)) => {
-            println!("{} --> {}:{}:{}:", err.msg, "filename", err.row, err.col);
-
-            for step in err.info {
-                println!(
-                    "\n{}\n{}^\n{}{}",
-                    input.lines().nth(step.row - 1).unwrap(),
-                    " ".repeat(step.col),
-                    " ".repeat(step.col),
-                    step.reason,
-                );
+        Err(errs) => {
+            for err in errs {
+                println!("{}", err.format_with("src/test.path", input));
             }
-        },
-        Err(Error::Pest(err)) => todo!("Print parser errors nicely:{}", err),
+        }
         Ok(program) => println!("{:#?}", program),
     }
 }
 
 pub fn sandbox() {
     run_sandbox("
-        PROCEDURE foo(x, y, z) IS baba
+        PROCEDURE foo(x, y, z) IS
         BEGIN
             x := y + z;
         END
