@@ -32,12 +32,12 @@ expression = {
 
 eq = { "=" }
 ne = { "!=" }
-gt = { ">" }
-lt = { "<" }
 ge = { ">=" }
 le = { "<=" }
+gt = { ">" }
+lt = { "<" }
 
-condition = { value ~ ( eq | ne | gt | lt | ge | le ) ~ value }
+condition = { value ~ ( eq | ne | ge | le | gt | lt ) ~ value }
 
 // Commands
 

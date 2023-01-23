@@ -42,6 +42,10 @@ impl Identifier {
         Self { name, loc }
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn loc(&self) -> &Location {
         &self.loc
     }
@@ -81,6 +85,10 @@ impl FuncCall {
     pub fn function_name(&self) -> &String {
         &self.func
     }
+
+    pub fn args(&self) -> &[Rc<Identifier>] {
+        self.args.as_ref()
+    }
 }
 
 #[derive(Debug)]
@@ -99,6 +107,18 @@ impl Expression {
     pub fn new(lhs: Value, op: Option<Operator>, rhs: Option<Value>) -> Self {
         Self { lhs, op, rhs }
     }
+
+    pub fn lhs(&self) -> &Value {
+        &self.lhs
+    }
+
+    pub fn rhs(&self) -> Option<&Value> {
+        self.rhs.as_ref()
+    }
+
+    pub fn op(&self) -> Option<&Operator> {
+        self.op.as_ref()
+    }
 }
 
 #[derive(Debug)]
@@ -111,6 +131,18 @@ pub struct Condition {
 impl Condition {
     pub fn new(lhs: Value, op: Comparator, rhs: Value) -> Self {
         Self { lhs, op, rhs }
+    }
+
+    pub fn lhs(&self) -> &Value {
+        &self.lhs
+    }
+
+    pub fn rhs(&self) -> &Value {
+        &self.rhs
+    }
+
+    pub fn op(&self) -> &Comparator {
+        &self.op
     }
 }
 
@@ -129,7 +161,7 @@ pub enum Command {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub args: HashMap<String, Rc<Identifier>>,
+    pub args: Vec<String>,
     pub vars: HashMap<String, Rc<Identifier>>,
     pub cmds: Vec<Command>,
     loc: Location,
@@ -139,7 +171,7 @@ impl Function {
     pub fn new(name: String, loc: Location) -> Self {
         Self {
             name, loc,
-            args: HashMap::new(),
+            args: Vec::new(),
             vars: HashMap::new(),
             cmds: Vec::new(),
         }

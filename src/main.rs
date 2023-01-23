@@ -1,5 +1,11 @@
-use compiler::sandbox;
+use compiler;
 
 fn main() {
-    sandbox();
+    compiler::parse_sandbox();
+    println!();
+    compiler::inter_sandbox_a();
+    println!();
+    compiler::inter_sandbox_b();
+    println!();
+    compiler::inter_sandbox_c();
 }

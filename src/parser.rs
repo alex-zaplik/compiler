@@ -56,9 +56,7 @@ impl<'a> From<Pair<'a, Rule>> for Comparator {
 
 impl Function {
     fn get_identifier(&self, token: Pair<Rule>) -> Result<Rc<Identifier>, Error> {
-        if self.args.contains_key(token.as_str()) {
-            Ok(Rc::clone(self.args.get(token.as_str()).unwrap()))
-        } else if self.vars.contains_key(token.as_str()) {
+        if self.vars.contains_key(token.as_str()) {
             Ok(Rc::clone(self.vars.get(token.as_str()).unwrap()))
         } else {
             let loc = Location::from(token.line_col());
@@ -140,9 +138,7 @@ impl Function {
         for decl in declarations.into_inner() {
             let loc = Location::from(decl.line_col());
 
-            let prev = if self.args.contains_key(decl.as_str()) {
-                self.args.get(decl.as_str())
-            } else if self.vars.contains_key(decl.as_str()) {
+            let prev = if self.vars.contains_key(decl.as_str()) {
                 self.vars.get(decl.as_str())
             } else {
                 None
@@ -157,7 +153,8 @@ impl Function {
                 let ident = Rc::new(Identifier::new(decl.as_str().to_owned(), loc));
     
                 if use_args {
-                    self.args.insert(name, ident);
+                    self.args.push(name.clone());
+                    self.vars.insert(name, ident);
                 } else {
                     self.vars.insert(name, ident);
                 }
@@ -430,6 +427,9 @@ impl Program {
         for proc in program.procedures.values() {
             program.check_func_calls(&proc.cmds, &mut errs);
         }
+
+        // TODO: Generate warnings for unused variables and functions
+        // TODO: Generate warnings for variables used before a value is assigned to them
 
         if errs.is_empty() {
             Ok(program)
